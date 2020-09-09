@@ -1,12 +1,16 @@
+# http://localhost:8501/
+
 import streamlit as st
 from scipy.integrate import odeint
 import numpy as np
 import matplotlib.pyplot as plt
-import datetime
+import matplotlib.dates as mdates
+from datetime import datetime, timedelta
 import pandas as pd
 
-
 def main():
+
+# Заголовок
     """ Test Dataset (3) """
     st.title("Second test with database")
     st.text("I hope everything works out")
@@ -20,6 +24,7 @@ def main():
     $$\frac{dR}{dt} = \gamma*I$$
     '''
 
+# Используемые уравнения при построении
     def SIR(y, t, N, beta, gamma):
         S, I, R = y
         dSdt = -beta * S * I / N
@@ -27,6 +32,8 @@ def main():
         dRdt = gamma * I
         return dSdt, dIdt, dRdt
 
+
+# Настройка параметров системы
     st.subheader("System parameters")
 
     N = st.slider('Population', min_value=10, max_value=10000, value=1000, step=1)
@@ -36,6 +43,7 @@ def main():
                   value=4.0, step=0.1)
     gamma = 1.0 / D
 
+# Установка начальных условий
     st.subheader("Starting conditions")
 
     S0 = st.slider('Number of people susceptible', min_value=1, max_value=(N - 1), value=(N - 1), step=1)
@@ -43,51 +51,81 @@ def main():
     R0 = st.slider('Number of people recovered', min_value=0, max_value=I0, value=0, step=1)
     y0 = S0, I0, R0
 
-    st.subheader("Date parameters")
+# Установка даты
+    today = datetime.today()
+    start_day = datetime.strptime('2020-08-01', '%Y-%m-%d')
+    start = st.date_input('Start date', start_day)
+    end = st.date_input('End date', today)
+    last = end - timedelta(days=1)
 
-    today = datetime.date.today()
-    tomorrow = today + datetime.timedelta(days=1)
-    one_day = tomorrow - datetime.timedelta(days=1)
-    start = st.date_input('Start date', today)
-    end = st.date_input('End date', tomorrow)
-    last = st.date_input('Last date', one_day)
-
+# Проверка условия согласованности
     if start < end:
         st.success('Start date: `%s`\n\nEnd date: `%s`\n\n' % (start, end))
     else:
         st.error('Error: End date must fall after start date.')
 
-    if last < end:
-        st.success('Last date: `%s`\n\nEnd date: `%s`\n\n' % (last, end))
+    if start < last:
+        st.success('Start date: `%s`\n\nLast date: `%s`\n\n' % (start, last))
     else:
-        st.error('Error: End date must fall after last date.')
+        st.error('Error: Last date must fall after start date.')
 
-    t = pd.date_range(start=np.datetime64(start), end=np.datetime64(last), freq="D")
+# Определение периода дней
+    period = end - start
+    days_full = period.days
+    st.write("Period = ", days_full)
+
+# Установка array [0, 1, 2, ... days_full]
+    t = np.linspace(0, days_full-1, days_full)
 
     ret = odeint(SIR, y0, t, args=(N, beta, gamma))
-
     S, I, R = ret.T
 
-    def plotsir(t, S, I, R):
+    first_date = np.datetime64(start)
+    x_ticks = pd.date_range(start=first_date, periods=days_full, freq="D")
+
+# Функция построения графиков
+    def plotsir(S, I, R, t1=None, x_ticks=None):
         f, ax = plt.subplots(1, 1, figsize=(10, 4))
-        ax.plot(t, S, 'b', alpha=0.7, linewidth=2, label='Susceptible')
-        ax.plot(t, I, 'y', alpha=0.7, linewidth=2, label='Infected')
-        ax.plot(t, R, 'g', alpha=0.7, linewidth=2, label='Recovered')
 
-        ax.set_xlabel('Time (days)')
+# Условие вывода простого графика
+        if x_ticks is None:
+            ax.plot(t1, S, 'b', alpha=0.7, linewidth=2, label='Susceptible')
+            ax.plot(t1, I, 'y', alpha=0.7, linewidth=2, label='Infected')
+            ax.plot(t1, R, 'g', alpha=0.7, linewidth=2, label='Recovered')
 
-        ax.yaxis.set_tick_params(length=0)
-        ax.xaxis.set_tick_params(length=0)
+# Условие для вывода графика по датам
+        else:
+            ax.plot(x_ticks, S, 'b', alpha=0.7, linewidth=2, label='Susceptible')
+            ax.plot(x_ticks, I, 'y', alpha=0.7, linewidth=2, label='Infected')
+            ax.plot(x_ticks, R, 'g', alpha=0.7, linewidth=2, label='Recovered')
+            ax.xaxis.set_minor_locator(mdates.MonthLocator())
+            #ax.set_xticks(x_ticks)
+            f.autofmt_xdate()
+
+        ax.title.set_text('Extended SIR-Model')
+
         ax.grid(b=True, which='major', c='w', lw=2, ls='-')
         legend = ax.legend()
         legend.get_frame().set_alpha(0.5)
         for spine in ('top', 'right', 'bottom', 'left'):
             ax.spines[spine].set_visible(False)
-            st.pyplot()
+        st.pyplot()
 
-    if st.button("Show Plot SIR"):
+# Кнопка вывода простого графика по периоду дней
+    if st.button("Show Plot SIR", key=1):
         st.text("Enjoy")
-        plotsir(t, S, I, R)
+        plotsir(S, I, R, x_ticks=None, t1=t)
 
+# Кнопка вывода графика по датам
+    if st.button("Show Plot SIR with date format", key=2):
+        st.text("Enjoy")
+        plotsir(S, I, R, x_ticks=x_ticks, t1=None)
+
+# Тест вывода данных средством Streamlit, пока плачевно
+    if st.button("Test line plot", key=4):
+        df = pd.DataFrame(R)
+        st.line_chart(df)
+
+# Ну тут и так понятно
 if __name__ == '__main__':
     main()
